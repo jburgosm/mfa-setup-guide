@@ -257,7 +257,8 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // Now using onAuthStateChanged to reliably get the user ID
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, runTransaction, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // GLOBAL VARIABLES from Canvas environment
@@ -277,16 +278,27 @@
                 auth = getAuth(app);
                 db = getFirestore(app);
 
-                if (authToken) {
-                    await signInWithCustomToken(auth, authToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                console.log("Firebase initialized and user signed in:", userId);
-
-                // Display the user ID after authentication is complete
-                document.getElementById('userIDDisplay').textContent = userId;
+                // Use onAuthStateChanged to ensure we get the user ID only when authentication is ready.
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        // User is signed in. We can safely get their UID.
+                        userId = user.uid;
+                        console.log("Firebase user authenticated with UID:", userId);
+                        document.getElementById('userIDDisplay').textContent = userId;
+                    } else {
+                        // User is signed out. Attempt to sign in with custom token or anonymously.
+                        // This ensures the sign-in flow is attempted only once on load.
+                        try {
+                            if (authToken) {
+                                await signInWithCustomToken(auth, authToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error during sign-in:", error);
+                        }
+                    }
+                });
 
             } catch (error) {
                 console.error("Error initializing Firebase:", error);
